@@ -4,9 +4,11 @@ import time
 import sqlite3
 import datetime
 import importlib
+import configparser
 
 from systemd import journal
-from gsl_util import load_log_config,syslog_identifier_map
+
+LOGANT_CONF = '/home/haru/logant.conf'
 
 g_gop_regex = re.compile('GRMCODE=\w+')
 GRAC_NETWORK_NAME = 'GRAC: Disallowd Network'
@@ -27,26 +29,26 @@ class LogAnt:
                 '_EXE': 10,
                 '_CMDLINE': 11 }
 
-    def __init__(self):
+    def __init__(self, house, targets):
         self.elephant = journal.Reader()
-        self.house = sqlite3.connect('house.db')
+        self.house = sqlite3.connect(house)
         self.room = self.house.cursor()
         self.room.execute(''' CREATE TABLE
                               IF NOT EXISTS
                               GOOROOM_SECURITY_LOG (
                                   __REALTIME_TIMESTAMP TEXT,
-                                  PRIORITY             TEXT,
+                                  PRIORITY             INTEGER,
                                   MESSAGE              TEXT,
                                   GRMCODE              TEXT,
                                   SYSLOG_IDENTIFIER    TEXT,
                                   _TRANSPORT           TEXT,
                                   _HOSTNAME            TEXT,
-                                  _UID                 TEXT,
-                                  _GID                 TEXT,
-                                  _PID                 TEXT,
+                                  _UID                 INTEGER,
+                                  _GID                 INTEGER,
+                                  _PID                 INTEGER,
                                   _EXE                 TEXT,
                                   _CMDLINE             TEXT) ''')
-        self.targets = dict() 
+        self.targets = targets.split(',')
 
     def work(self):
         self.crawl()
@@ -56,7 +58,6 @@ class LogAnt:
         self.bite(identifier=False)
 
     def crawl(self):
-        print("crwaling")
         self.room.execute(''' SELECT * FROM GOOROOM_SECURITY_LOG
                               ORDER BY __REALTIME_TIMESTAMP
                               DESC LIMIT 1 ''')
@@ -67,21 +68,17 @@ class LogAnt:
         else:
             self.lasttime = datetime.datetime.now()
         print(self.lasttime)
-        self.elephant.seek_realtime(1)
-        #self.elephant.seek_realtime(self.lasttime)
+        self.elephant.seek_realtime(self.lasttime)
 
     def sniff(self, identifier):
         self.elephant.flush_matches()
         if identifier:
-            wanted = load_log_config(mode='DAEMON')
-            self.targets = syslog_identifier_map(wanted)
-            for target, targetname in self.targets.items():
-                self.elephant.add_match(SYSLOG_IDENTIFIER=target)
+            for target in self.targets:
+                self.elephant.add_match(SYSLOG_IDENTIFIER=target.strip())
         else:
             self.elephant.add_match(_TRANSPORT='kernel')
 
     def bite(self, identifier):
-        print("biting")
         for flesh in self.elephant:
             if '_KERNEL_SUBSYSTEM' in flesh.keys():
                 continue
@@ -107,6 +104,9 @@ class LogAnt:
                     if search_cause is None or search_file is None:
                         continue
                     else:
+                        cause_string = search_cause.group().replace('cause=', '')
+                        if cause_string == '"no_label"' and '_AUDIT_FIELD_NAME' in flesh.keys():
+                            prey[self.feature['MESSAGE']] = prey[self.feature['MESSAGE']].replace('no_label', flesh['_AUDIT_FIELD_NAME'].replace('"', ''))
                         prey[self.feature['GRMCODE']] = '001002'
 
             print()
@@ -116,7 +116,6 @@ class LogAnt:
             self.drag(prey)
 
     def drag(self, prey):
-        print("dragging")
         command = ''' INSERT INTO GOOROOM_SECURITY_LOG (
                                       __REALTIME_TIMESTAMP,
                                       PRIORITY,
@@ -146,18 +145,23 @@ class LogAnt:
         self.store()
 
     def store(self):
-        print("storing")
         self.house.commit()
 
-    def rest(self):
+    def sleep(self):
         self.house.close()
 
 
 if __name__ == "__main__":
-    logant = LogAnt()
+    config = configparser.ConfigParser()
+    config.read(LOGANT_CONF)
 
+    database = config['LOGANT']['GSL_DATABASE']
+    syslog_identifier = config['LOGANT']['SYSLOG_IDENTIFIERS']
+    break_time = int(config['LOGANT']['BREAK_TIME_SECONDS'])
+
+    logant = LogAnt(database, syslog_identifier)
     while True:
         logant.work()
-        time.sleep(5)
+        time.sleep(break_time)
 
-    logant.rest()
+    logant.sleep()
