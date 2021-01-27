@@ -250,10 +250,7 @@ def get_summary(c, mode='DAEMON'):
 
     last_entry = None
     now_for_nolog = datetime.datetime.now()
-    i = 1
     for entry in c:
-        print(f'entry_count: {i}')
-        i += 1
         try:
             printname = ''
             if entry['SYSLOG_IDENTIFIER'] in identifier_map.keys():
