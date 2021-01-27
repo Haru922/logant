@@ -67,7 +67,6 @@ class LogAnt:
             self.lasttime += datetime.timedelta(microseconds=1)
         else:
             self.lasttime = datetime.datetime.now()
-        print(self.lasttime)
         self.elephant.seek_realtime(self.lasttime)
 
     def sniff(self, identifier):
@@ -109,10 +108,6 @@ class LogAnt:
                             prey[self.feature['MESSAGE']] = prey[self.feature['MESSAGE']].replace('no_label', flesh['_AUDIT_FIELD_NAME'].replace('"', ''))
                         prey[self.feature['GRMCODE']] = '001002'
 
-            print()
-            for k,v in self.feature.items():
-                print('{}: {}'.format(k, prey[v]))
-            print()
             self.drag(prey)
 
     def drag(self, prey):
