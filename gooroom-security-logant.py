@@ -1,6 +1,7 @@
 import re
 import sys
 import time
+import signal
 import sqlite3
 import datetime
 import importlib
@@ -30,6 +31,7 @@ class LogAnt:
                 '_CMDLINE': 11 }
 
     def __init__(self, house, targets):
+        self.sleeping = False
         self.elephant = journal.Reader()
         self.house = sqlite3.connect(house)
         self.room = self.house.cursor()
@@ -142,9 +144,9 @@ class LogAnt:
     def store(self):
         self.house.commit()
 
-    def sleep(self):
+    def sleep(self, signum, frame):
         self.house.close()
-
+        self.sleeping = True
 
 if __name__ == "__main__":
     config = configparser.ConfigParser()
@@ -155,8 +157,7 @@ if __name__ == "__main__":
     break_time = int(config['LOGANT']['BREAK_TIME_SECONDS'])
 
     logant = LogAnt(database, syslog_identifier)
-    while True:
+    signal.signal(signal.SIGTERM, logant.sleep)
+    while not logant.sleeping:
         logant.work()
         time.sleep(break_time)
-
-    logant.sleep()

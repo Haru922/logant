@@ -1,0 +1,11 @@
+[Unit]
+Description=Gooroom Security Logant
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/lib/gooroom-security-utils/gooroom-security-logant.py
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
