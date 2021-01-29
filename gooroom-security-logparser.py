@@ -22,7 +22,7 @@ from systemd import journal
 #-----------------------------------------------------------------------
 g_trans_parser = load_translation()
 
-LOGANT_CONF = '/home/haru/logant.conf'
+LOGANT_CONF = '/usr/lib/gooroom-security-utils/logant.conf'
 
 #-----------------------------------------------------------------------
 #AGENT is using this function

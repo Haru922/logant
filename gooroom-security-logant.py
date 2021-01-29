@@ -9,7 +9,7 @@ import configparser
 
 from systemd import journal
 
-LOGANT_CONF = '/home/haru/logant.conf'
+LOGANT_CONF = '/usr/lib/gooroom-security-utils/logant.conf'
 
 g_gop_regex = re.compile('GRMCODE=\w+')
 GRAC_NETWORK_NAME = 'GRAC: Disallowd Network'
