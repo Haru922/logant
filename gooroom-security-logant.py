@@ -51,6 +51,7 @@ class LogAnt:
                                   _EXE                 TEXT,
                                   _CMDLINE             TEXT) ''')
         self.targets = targets.split(',')
+        self.lasttime = datetime.datetime.now()
 
     def work(self):
         self.crawl()
@@ -67,8 +68,6 @@ class LogAnt:
         if prey:
             self.lasttime = datetime.datetime.strptime(prey[0],'%Y-%m-%d %H:%M:%S.%f')
             self.lasttime += datetime.timedelta(microseconds=1)
-        else:
-            self.lasttime = datetime.datetime.now()
         self.elephant.seek_realtime(self.lasttime)
 
     def sniff(self, identifier):
@@ -143,6 +142,7 @@ class LogAnt:
 
     def store(self):
         self.house.commit()
+        self.lasttime = datetime.datetime.now()
 
     def sleep(self, signum, frame):
         self.house.close()
