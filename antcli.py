@@ -31,7 +31,7 @@ def get_log(c, syslog_identifier, log_start_time, log_end_time, details, verbose
                 print('{}: {}'.format(key, row[key]))
             print()
         else:
-            print(' '.join([str(row[key]) for key in keys]))
+            print(' | '.join([str(row[key]) for key in keys]))
             
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
