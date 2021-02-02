@@ -9,6 +9,8 @@ import configparser
 
 from systemd import journal
 
+from gsl_util import load_log_config,syslog_identifier_map
+
 LOGANT_CONF = '/usr/lib/gooroom-security-utils/logant.conf'
 
 g_gop_regex = re.compile('GRMCODE=\w+')
@@ -32,6 +34,8 @@ class LogAnt:
 
     def __init__(self, house, targets):
         self.sleeping = False
+        self.targets = targets
+        print(targets)
         self.elephant = journal.Reader()
         self.house = sqlite3.connect(house)
         self.room = self.house.cursor()
@@ -50,7 +54,6 @@ class LogAnt:
                                   _PID                 INTEGER,
                                   _EXE                 TEXT,
                                   _CMDLINE             TEXT) ''')
-        self.targets = targets.split(',')
         self.lasttime = datetime.datetime.now()
 
     def work(self):
@@ -112,6 +115,7 @@ class LogAnt:
             self.drag(prey)
 
     def drag(self, prey):
+        print(tuple(prey))
         command = ''' INSERT INTO GOOROOM_SECURITY_LOG (
                                       __REALTIME_TIMESTAMP,
                                       PRIORITY,
@@ -152,8 +156,10 @@ if __name__ == "__main__":
     config = configparser.ConfigParser()
     config.read(LOGANT_CONF)
 
+    log_json = load_log_config()
+    syslog_identifier = [si for si in syslog_identifier_map(log_json).keys()]
+
     database = config['LOGANT']['GSL_DATABASE']
-    syslog_identifier = config['LOGANT']['SYSLOG_IDENTIFIERS']
     break_time = int(config['LOGANT']['BREAK_TIME_SECONDS'])
 
     logant = LogAnt(database, syslog_identifier)

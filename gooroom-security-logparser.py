@@ -43,7 +43,7 @@ def get_notify_level(printname):
     get notify-level in config
     """
 
-    return JournalLevel[load_log_config('GRAC')[printname]['notify_level']].value
+    return JournalLevel[load_log_config()[printname]['notify_level']].value
 
 #-----------------------------------------------------------------------
 g_gop_regex = re.compile('GRMCODE=\w+')
@@ -70,7 +70,7 @@ def identifier_processing(entry, mode, printname, notify_level, result):
     log = {
         'grmcode':entry['GRMCODE'],
         'level':JournalLevel(entry['PRIORITY']).name,
-        'time':entry['__REALTIME_TIMESTAMP'],
+        'time':str(entry['__REALTIME_TIMESTAMP']),
         'log':'{} {}'.format(entry['__REALTIME_TIMESTAMP'], message),
         'type':status_lang_set(mode, 0),
         'eval_level':notify_level}
@@ -178,7 +178,7 @@ def no_identifier_processing(entry, mode, result, log_json):
         log = {
             'grmcode':entry['GRMCODE'],
             'level':JournalLevel(entry['PRIORITY']).name,
-            'time':entry['__REALTIME_TIMESTAMP'],
+            'time':str(entry['__REALTIME_TIMESTAMP']),
             'log':'{} {}'.format(entry['__REALTIME_TIMESTAMP'], message),
             'type':status_lang_set(mode, 0),
             'eval_level':notify_level}
@@ -203,7 +203,7 @@ def get_summary(c, mode='DAEMON'):
 
     #verify_journal_disk_usage()
 
-    log_json = load_log_config(mode)
+    log_json = load_log_config()
     identifier_map = syslog_identifier_map(log_json)
 
     #identifier and priority
@@ -259,7 +259,7 @@ def get_summary(c, mode='DAEMON'):
                 printname = identifier_map[entry['gop-daemon']]
 
             if printname:
-                if log_json[printname]['priority_key'] >= entry['PRIORITY'] or log_json[printname]['priority_key'] == JournalLevel['none'].value:
+                if log_json[printname]['priority_key'] >= entry['PRIORITY']:
                     notify_level = log_json[printname]['notify_level']
                     log_total_len += \
                         identifier_processing(entry,
@@ -283,8 +283,10 @@ def get_summary(c, mode='DAEMON'):
     result['log_total_len'] = log_total_len
 
     if last_entry:
-        next_seek_time = datetime.datetime.strptime(last_entry['__REALTIME_TIMESTAMP'], '%Y-%m-%d %H:%M:%S.%f')
-        next_seek_time += datetime.timedelta(microseconds=1)
+        if mode == 'GUI':
+            next_seek_time = datetime.datetime.strptime(last_entry['__REALTIME_TIMESTAMP'], '%Y-%m-%d %H:%M:%S.%f') + datetime.timedelta(microseconds=1)
+        else:
+            next_seek_time = last_entry['__REALTIME_TIMESTAMP'] + datetime.timedelta(microseconds=1)
     else:
         next_seek_time = now_for_nolog
         
