@@ -1,0 +1,5 @@
+[D-BUS Service] 
+Name=kr.gooroom.logant 
+Exec=/usr/lib/gooroom-security-utils/gooroom-security-logant.py 
+User=root 
+SystemdService=gooroom-security-logant.service 

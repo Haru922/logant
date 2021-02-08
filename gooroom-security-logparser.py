@@ -10,6 +10,7 @@ import subprocess
 import importlib
 import datetime
 import sqlite3
+import dbus
 import re
 
 
@@ -228,6 +229,9 @@ def get_summary(c, mode='DAEMON'):
             else:
                 level_key = 'show_level'
 
+        print('{}->transmit_level: {}, show_level: {}, notify_level: {}'.format(printname, log_json[printname]['transmit_level'], log_json[printname]['show_level'], log_json[printname]['notify_level']))
+        print('{} level: {}({})'.format(printname, level_key, log_json[printname][level_key]))
+        print()
         log_json[printname]['priority_key'] = JournalLevel[log_json[printname][level_key]].value
 
     #초기화 및 실행상태, 로그등급
@@ -290,8 +294,13 @@ def get_summary(c, mode='DAEMON'):
     else:
         next_seek_time = now_for_nolog
         
-    with open('/var/tmp/GOOROOM-SECURITY-LOGPARSER-NEXT-SEEKTIME', 'w') as f:
-        f.write(next_seek_time.strftime('%Y%m%d-%H%M%S.%f'))
+    try:
+        logant_obj = dbus.SystemBus().get_object('kr.gooroom.logant', '/kr/gooroom/logant')
+        logant_result = logant_obj.update_next_seektime(next_seek_time.strftime('%Y%m%d-%H%M%S.%f'))
+        if logant_result is False:
+            print('** [ERROR] gooroom-security-logparser->UPDATE NEXT SEEKTIME FAILED. **')
+    except dbus.exceptions.DBusException:
+        print('** [ERROR] gooroom-security-logparser->DBusException: CANNOT GET LOGANT OBJECT. ** ')
 
     return result
 
