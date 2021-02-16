@@ -1,21 +1,15 @@
+import os
 import re
 import sys
 import time
 import signal
-import psutil
 import sqlite3
 import datetime
 import importlib
 import configparser
 
-from gi.repository import GLib
 from systemd import journal
-
 from gsl_util import load_log_config,syslog_identifier_map
-
-import dbus
-import dbus.service
-from dbus.mainloop.glib import DBusGMainLoop
 
 LOGANT_CONF = '/usr/lib/gooroom-security-utils/logant.conf'
 
@@ -24,7 +18,7 @@ GRAC_NETWORK_NAME = 'GRAC: Disallowd Network'
 P_CAUSE = re.compile('cause=\S*')
 P_FILE = re.compile('name=\S*')
 
-class LogAnt(dbus.service.Object):
+class LogAnt:
     feature = { '__REALTIME_TIMESTAMP': 0,
                 'PRIORITY': 1,
                 'MESSAGE': 2,
@@ -39,9 +33,7 @@ class LogAnt(dbus.service.Object):
                 '_CMDLINE': 11 }
 
     def __init__(self, house, targets):
-        pheromone = dbus.service.BusName('kr.gooroom.logant', bus=dbus.SystemBus())
-        dbus.service.Object.__init__(self, pheromone, '/kr/gooroom/logant')
-        self.loop = GLib.MainLoop()
+        self.sleeping = False
         self.targets = targets
         self.elephant = journal.Reader()
         self.house = sqlite3.connect(house)
@@ -63,16 +55,12 @@ class LogAnt(dbus.service.Object):
                                   _CMDLINE             TEXT) ''')
         self.lasttime = datetime.datetime.now()
 
-    def start(self):
-        self.loop.run()
-
     def work(self):
         self.crawl()
         self.sniff(identifier=True)
         self.bite(identifier=True)
         self.sniff(identifier=False)
         self.bite(identifier=False)
-        return True
 
     def crawl(self):
         self.room.execute(''' SELECT * FROM GOOROOM_SECURITY_LOG
@@ -99,7 +87,7 @@ class LogAnt(dbus.service.Object):
             prey = ['']*len(self.feature)
             for k, v in self.feature.items():
                 prey[v] = flesh[k] if k in flesh else ''
-            
+
             message = flesh['MESSAGE']
             if identifier:
                 if type(message) is bytes:
@@ -160,36 +148,29 @@ class LogAnt(dbus.service.Object):
 
     def sleep(self, signum, frame):
         self.house.close()
-        self.loop.quit()
-
-    @dbus.service.method(dbus_interface='kr.gooroom.logant', in_signature='s', out_signature='b', sender_keyword='sender')
-    def update_next_seektime(self, time, sender=None):
-        bus_obj = dbus.SystemBus().get_object('org.freedesktop.DBus', '/org/freedesktop/DBus')
-        bus_inf = dbus.Interface(bus_obj, dbus_interface='org.freedesktop.DBus')
-        pid = bus_inf.GetConnectionUnixProcessID(sender)
-        ps = psutil.Process(pid)
-        exe = ps.exe()
-        cmdline = ps.cmdline()
-        script = cmdline[1]
-        if exe == '/usr/bin/python3.7' and script == '/usr/bin/gooroom-security-logparser.py':
-            with open('/var/tmp/GOOROOM-SECURITY-LOGPARSER-NEXT-SEEKTIME', 'w') as f:
-                f.write(time)
-        else:
-            return False
-        return True
+        self.sleeping = True
 
 if __name__ == "__main__":
-    config = configparser.ConfigParser()
-    config.read(LOGANT_CONF)
+    if os.geteuid():
+        sys.exit('gooroom-security-logant: Permission denied')
 
-    log_json = load_log_config()
-    syslog_identifier = [si for si in syslog_identifier_map(log_json).keys()]
+    try:
+        config = configparser.ConfigParser()
+        config.read(LOGANT_CONF)
 
-    database = config['LOGANT']['GSL_DATABASE']
-    break_time = int(config['LOGANT']['BREAK_TIME_SECONDS'])
-    DBusGMainLoop(set_as_default=True)
+        database = config['LOGANT']['GSL_DATABASE']
+        break_time = int(config['LOGANT']['BREAK_TIME_SECONDS'])
 
-    logant = LogAnt(database, syslog_identifier)
-    signal.signal(signal.SIGTERM, logant.sleep)
-    GLib.timeout_add_seconds(break_time, logant.work)
-    logant.start()
+    except Exception as e:
+        print('[LOGANT] CANNOT GET LOGANT CONFIGURATION.', e)
+
+    else:
+        log_json = load_log_config()
+        syslog_identifier = [si for si in syslog_identifier_map(log_json).keys()]
+
+        logant = LogAnt(database, syslog_identifier)
+        signal.signal(signal.SIGTERM, logant.sleep)
+
+        while not logant.sleeping:
+            logant.work()
+            time.sleep(break_time)

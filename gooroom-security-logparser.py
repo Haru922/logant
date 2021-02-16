@@ -10,7 +10,7 @@ import subprocess
 import importlib
 import datetime
 import sqlite3
-import dbus
+import os
 import re
 
 
@@ -60,7 +60,7 @@ def identifier_processing(entry, mode, printname, notify_level, result):
     if entry['GRMCODE']:
     #if grmcode:
         try:
-            ko = g_trans_parser.get(entry['GRMCODE'], 'ko')    
+            ko = g_trans_parser.get(entry['GRMCODE'], 'ko')
             message = combine_message(message, ko)
         except:
             pass
@@ -137,9 +137,9 @@ def no_identifier_processing(entry, mode, result, log_json):
         message = \
             '비인가 네트워크 패킷(출발지 {}:{}, 목적지 {}:{})이'\
             '탐지되어 차단하였습니다'.format(
-                                        src_ip_string, 
-                                        src_port_string, 
-                                        dst_ip_string, 
+                                        src_ip_string,
+                                        src_port_string,
+                                        dst_ip_string,
                                         dst_port_string)
         printname = 'media'
         '''
@@ -229,9 +229,6 @@ def get_summary(c, mode='DAEMON'):
             else:
                 level_key = 'show_level'
 
-        print('{}->transmit_level: {}, show_level: {}, notify_level: {}'.format(printname, log_json[printname]['transmit_level'], log_json[printname]['show_level'], log_json[printname]['notify_level']))
-        print('{} level: {}({})'.format(printname, level_key, log_json[printname][level_key]))
-        print()
         log_json[printname]['priority_key'] = JournalLevel[log_json[printname][level_key]].value
 
     #초기화 및 실행상태, 로그등급
@@ -287,20 +284,13 @@ def get_summary(c, mode='DAEMON'):
     result['log_total_len'] = log_total_len
 
     if last_entry:
-        if mode == 'GUI':
-            next_seek_time = datetime.datetime.strptime(last_entry['__REALTIME_TIMESTAMP'], '%Y-%m-%d %H:%M:%S.%f') + datetime.timedelta(microseconds=1)
-        else:
-            next_seek_time = last_entry['__REALTIME_TIMESTAMP'] + datetime.timedelta(microseconds=1)
+        next_seek_time = str(last_entry['__REALTIME_TIMESTAMP'])
+        next_seek_time = datetime.datetime.strptime(next_seek_time, '%Y-%m-%d %H:%M:%S.%f') + datetime.timedelta(microseconds=1)
     else:
         next_seek_time = now_for_nolog
-        
-    try:
-        logant_obj = dbus.SystemBus().get_object('kr.gooroom.logant', '/kr/gooroom/logant')
-        logant_result = logant_obj.update_next_seektime(next_seek_time.strftime('%Y%m%d-%H%M%S.%f'))
-        if logant_result is False:
-            print('** [ERROR] gooroom-security-logparser->UPDATE NEXT SEEKTIME FAILED. **')
-    except dbus.exceptions.DBusException:
-        print('** [ERROR] gooroom-security-logparser->DBusException: CANNOT GET LOGANT OBJECT. ** ')
+
+    with open('/var/tmp/GOOROOM-SECURITY-LOGPARSER-NEXT-SEEKTIME', 'w') as f:
+        f.write(next_seek_time.strftime('%Y%m%d-%H%M%S.%f'))
 
     return result
 
@@ -328,13 +318,17 @@ def verify_journal_disk_usage():
     if verifying is failed, raise exception
     """
 
-    disk_usage = get_current_journal_disk_usage() 
+    disk_usage = get_current_journal_disk_usage()
     if disk_usage > 5.0:
         raise Exception('JOURNAL DISK USAGE({}G) '\
             'IS TOO LARGE'.format(disk_usage))
 
 #-----------------------------------------------------------------------
 if __name__ == '__main__':
+
+    if os.geteuid():
+        sys.exit('gooroom-security-logparser: Permission denied')
+
     config = configparser.ConfigParser()
     config.read(LOGANT_CONF)
     gsl_db = config['LOGANT']['GSL_DATABASE']
@@ -352,9 +346,9 @@ if __name__ == '__main__':
         c.execute('SELECT * FROM GOOROOM_SECURITY_LOG')
 
     print('JSON-ANCHOR=%s' % json.dumps(
-                                get_summary(c, mode='GUI'), 
-                                ensure_ascii=False, 
-                                sort_keys=True, 
-                                indent=4, 
+                                get_summary(c, mode='GUI'),
+                                ensure_ascii=False,
+                                sort_keys=True,
+                                indent=4,
                                 separators=(',', ': ')))
     conn.close()
