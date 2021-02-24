@@ -33,9 +33,9 @@ class LogAnt:
                 '_CMDLINE': 11 }
 
     def __init__(self, house, targets):
+        self.elephant = None
         self.sleeping = False
         self.targets = targets
-        self.elephant = journal.Reader()
         self.house = sqlite3.connect(house)
         self.room = self.house.cursor()
         self.room.execute(''' CREATE TABLE
@@ -70,6 +70,7 @@ class LogAnt:
         if prey:
             self.lasttime = datetime.datetime.strptime(prey[0],'%Y-%m-%d %H:%M:%S.%f')
             self.lasttime += datetime.timedelta(microseconds=1)
+        self.elephant = journal.Reader()
         self.elephant.seek_realtime(self.lasttime)
 
     def sniff(self, identifier):

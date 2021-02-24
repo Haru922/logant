@@ -83,7 +83,7 @@ def identifier_processing(entry, mode, printname, notify_level, result):
         result['status_summary'] = status_lang_set(mode, 'vulnerable')
         log['type'] = status_lang_set(mode, 1)
 
-    return len(log['log'])
+    return 1
 
 #-----------------------------------------------------------------------
 GRAC_NETWORK_NAME = 'GRAC: Disallowed Network'
@@ -191,9 +191,30 @@ def no_identifier_processing(entry, mode, result, log_json):
             result['status_summary'] = status_lang_set(mode, 'vulnerable')
             log['type'] = status_lang_set(mode, 1)
 
-        return len(log['log'])
+        return 1
     else:
         return 0
+
+#-----------------------------------------------------------------------
+def load_entry(conn, mode, from_time):
+    c = conn.cursor()
+
+    if mode == 'DAEMON':
+        try:
+            with open('/var/tmp/GOOROOM-SECURITY-LOGPARSER-AGENT-NEXT-SEEKTIME', 'r') as f:
+                from_time = f.readline()
+        except:
+            pass
+
+    if from_time:
+        from_time = datetime.datetime.strptime(from_time, '%Y%m%d-%H%M%S.%f')
+        comp_time = datetime.datetime.strftime(from_time, '%Y-%m-%d %H:%M:%S.%f')
+        c.execute(''' SELECT * FROM GOOROOM_SECURITY_LOG
+                      WHERE __REALTIME_TIMESTAMP >= ? ''', (comp_time,))
+    else:
+        c.execute('SELECT * FROM GOOROOM_SECURITY_LOG')
+
+    return c
 
 #-----------------------------------------------------------------------
 def get_summary(c, mode='DAEMON'):
@@ -201,8 +222,13 @@ def get_summary(c, mode='DAEMON'):
     보안기능(os,exe,boot,media)의 journal로그를 파싱해서
     요약로그정보를 출력
     """
-
-    #verify_journal_disk_usage()
+    if mode == 'DAEMON':
+        config = configparser.ConfigParser()
+        config.read(LOGANT_CONF)
+        gsl_db = config['LOGANT']['GSL_DATABASE']
+        conn = sqlite3.connect(gsl_db)
+        conn.row_factory = sqlite3.Row
+        c = load_entry(conn, mode='DAEMON', from_time='')
 
     log_json = load_log_config()
     identifier_map = syslog_identifier_map(log_json)
@@ -250,7 +276,6 @@ def get_summary(c, mode='DAEMON'):
     log_total_len = 0
 
     last_entry = None
-    now_for_nolog = datetime.datetime.now()
     for entry in c:
         try:
             printname = ''
@@ -286,11 +311,16 @@ def get_summary(c, mode='DAEMON'):
     if last_entry:
         next_seek_time = str(last_entry['__REALTIME_TIMESTAMP'])
         next_seek_time = datetime.datetime.strptime(next_seek_time, '%Y-%m-%d %H:%M:%S.%f') + datetime.timedelta(microseconds=1)
-    else:
-        next_seek_time = now_for_nolog
 
-    with open('/var/tmp/GOOROOM-SECURITY-LOGPARSER-NEXT-SEEKTIME', 'w') as f:
-        f.write(next_seek_time.strftime('%Y%m%d-%H%M%S.%f'))
+        if mode == 'GUI':
+            with open('/var/tmp/GOOROOM-SECURITY-LOGPARSER-NEXT-SEEKTIME', 'w') as f:
+                f.write(next_seek_time.strftime('%Y%m%d-%H%M%S.%f'))
+        elif mode == 'DAEMON':
+            with open('/var/tmp/GOOROOM-SECURITY-LOGPARSER-AGENT-NEXT-SEEKTIME', 'w') as f:
+                f.write(next_seek_time.strftime('%Y%m%d-%H%M%S.%f'))
+
+    if mode == 'DAEMON':
+        conn.close()
 
     return result
 
@@ -334,16 +364,9 @@ if __name__ == '__main__':
     gsl_db = config['LOGANT']['GSL_DATABASE']
     conn = sqlite3.connect(gsl_db)
     conn.row_factory = sqlite3.Row
-    c = conn.cursor()
 
-    # 시간과 필터 설정
-    if len(sys.argv) > 1:
-        from_time = datetime.datetime.strptime(sys.argv[1], '%Y%m%d-%H%M%S.%f')
-        comp_time = datetime.datetime.strftime(from_time, '%Y-%m-%d %H:%M:%S.%f')
-        c.execute(''' SELECT * FROM GOOROOM_SECURITY_LOG
-                      WHERE __REALTIME_TIMESTAMP >= ? ''', (comp_time,))
-    else:
-        c.execute('SELECT * FROM GOOROOM_SECURITY_LOG')
+    from_time = sys.argv[1] if len(sys.argv) > 1 else ''
+    c = load_entry(conn, mode='GUI', from_time=from_time)
 
     print('JSON-ANCHOR=%s' % json.dumps(
                                 get_summary(c, mode='GUI'),

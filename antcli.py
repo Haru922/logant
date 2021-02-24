@@ -8,6 +8,7 @@ import sqlite3
 LOGANT_CONF = '/usr/lib/gooroom-security-utils/logant.conf'
 
 def get_log(c, syslog_identifier, log_start_time, log_end_time, details, verbose):
+    cnt = 0
     if syslog_identifier:
         query = ''' SELECT *
                     FROM GOOROOM_SECURITY_LOG
@@ -18,12 +19,13 @@ def get_log(c, syslog_identifier, log_start_time, log_end_time, details, verbose
     else:
         query = ''' SELECT *
                     FROM GOOROOM_SECURITY_LOG
-                    WHERE __REALTIME_TIMESTAMP BETWEEN ? AND ? 
+                    WHERE __REALTIME_TIMESTAMP BETWEEN ? AND ?
                     ORDER BY __REALTIME_TIMESTAMP '''
         c.execute(query, (log_start_time, log_end_time,))
 
     keys = ''
     for row in c:
+        cnt += 1
         if not keys:
             keys = row.keys() if details else ['__REALTIME_TIMESTAMP', 'PRIORITY', 'MESSAGE', 'GRMCODE', 'SYSLOG_IDENTIFIER']
         if verbose:
@@ -32,7 +34,8 @@ def get_log(c, syslog_identifier, log_start_time, log_end_time, details, verbose
             print()
         else:
             print(' | '.join([str(row[key]) for key in keys]))
-            
+    print('log count: {}'.format(cnt))
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--id', type=str, help='syslog identifier.', default='')
